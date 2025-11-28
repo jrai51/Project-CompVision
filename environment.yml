@@ -1,0 +1,31 @@
+name: compvision
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.9
+  # PyTorch stack (GPU)
+  - pytorch=2.5.*
+  - torchvision=0.20.*
+  - torchaudio=2.5.*
+  - pytorch-cuda=12.4         # from nvidia channel
+  # Scientific stack
+  - transformers
+  - numpy
+  - scipy
+  - scikit-learn
+  - pandas
+  - matplotlib
+  - tqdm
+  - jupyterlab
+  # OpenCV from conda-forge already includes contrib modules
+  - opencv>=4.9
+  - pip
+  - pip:
+      - kagglehub
+      - pypher
+      - timm
+      # If specifically need the PyPI wheel instead:
+      # - opencv-contrib-python==4.10.*
