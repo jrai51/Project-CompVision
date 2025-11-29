@@ -66,7 +66,7 @@ class KittiDepthCropped(Dataset):
         # --- load modalities ---
 
         # RGB: [0,1] then optional mean/std normalization
-        rgb = np.array(Image.open(rgb_path).convert("RGB"), dtype=np.float32) / 255.0  # (H, W, 3)
+        rgb = np.array(Image.open(rgb_path).convert("RGB"), dtype=np.float32) / 255.0   # (H, W, 3)
 
         # Sparse LiDAR depth (meters, NOT normalized)
         sparse = self._load_depth_png(sparse_path)  # (H, W)
@@ -75,19 +75,19 @@ class KittiDepthCropped(Dataset):
         gt = self._load_depth_png(gt_path)  # (H, W)
 
         # Monocular depth estimate (relative depth, already normalized per image to [0,1])
-        mono = np.load(mono_path).astype(np.float32)  # (H, W)
+        mono = np.load(mono_path).astype(np.float32)    # (H, W)
 
         # masks
         sparse_mask = (sparse > 0).astype(np.float32)
         gt_mask = (gt > 0).astype(np.float32)
 
         # to tensors, CHW
-        rgb = torch.from_numpy(rgb).permute(2, 0, 1)          # (3, H, W)
-        sparse = torch.from_numpy(sparse).unsqueeze(0)        # (1, H, W)
+        rgb = torch.from_numpy(rgb).permute(2, 0, 1)        # (3, H, W)
+        sparse = torch.from_numpy(sparse).unsqueeze(0)      # (1, H, W)
         sparse_mask = torch.from_numpy(sparse_mask).unsqueeze(0)
         gt = torch.from_numpy(gt).unsqueeze(0)
         gt_mask = torch.from_numpy(gt_mask).unsqueeze(0)
-        mono = torch.from_numpy(mono).unsqueeze(0)            # (1, H, W)
+        mono = torch.from_numpy(mono).unsqueeze(0)          # (1, H, W)
 
         # optional RGB normalization (e.g., ImageNet stats)
         if self.rgb_mean is not None and self.rgb_std is not None:
@@ -167,6 +167,4 @@ val_loader = DataLoader(
     num_workers=4,
     pin_memory=True,
 )
-
-print(f"Train samples: {len(train_dataset)}, Val samples: {len(val_dataset)}")
 

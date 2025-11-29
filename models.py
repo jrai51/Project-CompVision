@@ -158,3 +158,7 @@ class DepthUNet(nn.Module):
 # x = torch.cat([batch["mono"], batch["sparse"], batch["sparse_mask"]], dim=1)  # (B,3,H,W)
 # mono = batch["mono"]  # (B,1,H,W)
 # pred = model_lidar_mono(x, mono=mono)  # outputs mono + residual
+
+
+# Define Loss functions 
+
