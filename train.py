@@ -9,7 +9,7 @@ import torch
 from torch.utils.data import DataLoader
 
 # Adjust these imports to match your actual package structure
-from models import DepthUNet
+from models import DepthUNet, DepthUNetMonoFusion
 from data import KittiDepthCropped
 from losses import (
     global_l1_loss,
@@ -49,6 +49,7 @@ def parse_args():
     parser.add_argument("--lr", type=float, default=1e-4)
     parser.add_argument("--num_workers", type=int, default=4)
     parser.add_argument("--seed", type=int, default=42)
+    
 
     # Model / ablations
     parser.add_argument(
@@ -62,8 +63,8 @@ def parse_args():
 
     # Loss weights
     parser.add_argument("--w_all", type=float, default=1.0)
-    parser.add_argument("--w_lidar", type=float, default=0.1)
-    parser.add_argument("--w_tv", type=float, default=0.01)
+    parser.add_argument("--w_lidar", type=float, default=0.2)
+    parser.add_argument("--w_tv", type=float, default=0.001)
 
     # If time for quick tuning:
     # If outputs look too noisy / speckled : increase w_tv (0.02, 0.05).
@@ -122,27 +123,30 @@ def build_dataloaders(args):
 
 def build_model(args, device):
     """
-    Build DepthUNet with appropriate in_ch and residual flag
-    based on the chosen ablation.
+    Build model with appropriate in_ch and residual flag based on the chosen ablation.
     """
     if args.model_type == "lidar_only":
-        # inputs: [sparse, sparse_mask] -> 2 channels, predict absolute depth
+        # [sparse, sparse_mask] -> DepthUNet
         in_ch = 2
         residual = False
+        model = DepthUNet(in_ch=in_ch, base_ch=args.base_ch, residual=residual)
+
     elif args.model_type == "lidar_mono":
-        # inputs: [mono, sparse, sparse_mask] -> 3 channels, predict residual on mono
-        in_ch = 3
-        residual = True
+        # Use special fusion architecture for mono + LiDAR
+        # Here we start with ABSOLUTE depth; can flip residual=True later for the residual variant.
+        model = DepthUNetMonoFusion(base_ch=args.base_ch, residual=False)
+
     elif args.model_type == "lidar_mono_rgb":
-        # inputs: [rgb (3), mono, sparse, sparse_mask] -> 6 channels
+        # [rgb(3), mono, sparse, sparse_mask] -> 6 channels
         in_ch = 6
-        residual = True
+        residual = False
+        model = DepthUNet(in_ch=in_ch, base_ch=args.base_ch, residual=residual)
+
     else:
         raise ValueError(f"Unknown model_type {args.model_type}")
 
-    model = DepthUNet(in_ch=in_ch, base_ch=args.base_ch, residual=residual)
-    model = model.to(device)
-    return model
+    return model.to(device)
+
 
 
 def train_one_epoch(
@@ -167,13 +171,13 @@ def train_one_epoch(
 
         # Build model input based on ablation type
         if args.model_type == "lidar_only":
-            # [sparse, sparse_mask]
             x = torch.cat([sparse, sparse_mask], dim=1)
             pred = model(x)  # absolute depth prediction
+
         elif args.model_type == "lidar_mono":
-            # [mono, sparse, sparse_mask]
-            x = torch.cat([mono, sparse, sparse_mask], dim=1)
-            pred = model(x, mono=mono)  # mono + residual
+            # DO NOT concat here; fusion model expects separate sparse / mask / mono
+            pred = model(sparse, sparse_mask, mono) # predict depth directly
+
         elif args.model_type == "lidar_mono_rgb":
             # [rgb(3), mono, sparse, sparse_mask]
             x = torch.cat([rgb, mono, sparse, sparse_mask], dim=1)
@@ -232,14 +236,15 @@ def validate(epoch, model, val_loader, device, args):
         if args.model_type == "lidar_only":
             x = torch.cat([sparse, sparse_mask], dim=1)
             pred = model(x)
+
         elif args.model_type == "lidar_mono":
-            x = torch.cat([mono, sparse, sparse_mask], dim=1)
-            pred = model(x, mono=mono)
+            pred = model(sparse, sparse_mask, mono)
         elif args.model_type == "lidar_mono_rgb":
             x = torch.cat([rgb, mono, sparse, sparse_mask], dim=1)
-            pred = model(x, mono=mono)
+            pred = model(x)
         else:
             raise ValueError(f"Unknown model_type {args.model_type}")
+
 
         # ----- Compute validation LOSS (same components as training) -----
         loss_main = global_l1_loss(pred, gt, gt_mask)          # masked L1 vs GT
