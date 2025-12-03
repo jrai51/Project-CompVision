@@ -71,6 +71,12 @@ def parse_args():
     # If outputs look too smooth / washed out : decrease w_tv (0.005 or 0.001).
     # If LiDAR points are clearly being ignored (pred doesn’t match sparse at anchors) : bump w_lidar to 0.2.
 
+    parser.add_argument(
+        "--residual",
+        action="store_true",
+        help="Use residual learning if set, otherwise predict depth directly",
+    )
+
     args = parser.parse_args()
     return args
 
@@ -129,18 +135,18 @@ def build_model(args, device):
         # [sparse, sparse_mask] -> DepthUNet
         in_ch = 2
         residual = False
-        model = DepthUNet(in_ch=in_ch, base_ch=args.base_ch, residual=residual)
+        model = DepthUNet(in_ch=in_ch, base_ch=args.base_ch, residual=args.residual)
 
     elif args.model_type == "lidar_mono":
         # Use special fusion architecture for mono + LiDAR
         # Here we start with ABSOLUTE depth; can flip residual=True later for the residual variant.
-        model = DepthUNetMonoFusion(base_ch=args.base_ch, residual=False)
+        model = DepthUNetMonoFusion(base_ch=args.base_ch, residual=args.residual)
 
     elif args.model_type == "lidar_mono_rgb":
         # [rgb(3), mono, sparse, sparse_mask] -> 6 channels
         in_ch = 6
         residual = False
-        model = DepthUNet(in_ch=in_ch, base_ch=args.base_ch, residual=residual)
+        model = DepthUNet(in_ch=in_ch, base_ch=args.base_ch, residual=args.residual)
 
     else:
         raise ValueError(f"Unknown model_type {args.model_type}")
@@ -298,6 +304,12 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
 
+    # Mode:
+    if args.residual:
+        mode = "residual"
+    else:
+        mode = "direct-depth"
+
     # Data loaders
     train_loader, val_loader = build_dataloaders(args)
 
@@ -330,7 +342,7 @@ def main():
             best_rmse = rmse
             best_ckpt_path = os.path.join(
                 args.save_dir,
-                f"best_{args.model_type}_epoch{epoch}_rmse{rmse:.3f}.pth",
+        f"best_{args.model_type}_epoch{epoch}_rmse{rmse:.3f}_{mode}.pth",
             )
             torch.save(
                 {

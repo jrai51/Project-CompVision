@@ -205,8 +205,13 @@ class DepthUNetMonoFusion(nn.Module):
         self.up2 = Up(c4 + c3, c3)
         self.up3 = Up(c3 + c2, c2)
         self.up4 = Up(c2 + c1, c1)
+        
+        # self.head = nn.Conv2d(c1, 1, kernel_size=1)
 
-        self.head = nn.Conv2d(c1, 1, kernel_size=1)
+        # NEW: 1x1 conv to embed mono at full resolution
+        self.mono_skip = nn.Conv2d(1, c1, kernel_size=1)
+        # head now takes [decoder features + mono_embed]
+        self.head = nn.Conv2d(c1 * 2, 1, kernel_size=1)
 
         self.apply(self._init_weights)
 
@@ -245,7 +250,14 @@ class DepthUNetMonoFusion(nn.Module):
         d3 = self.up3(d2, e2)
         d4 = self.up4(d3, e1)
 
-        residual = self.head(d4)    # (B,1,H,W)
+        if mono is not None:
+            # NEW: inject *raw* mono structure at full resolution
+            mono_embed = self.mono_skip(mono)                   # (B,c1,H,W)
+            d4_cat = torch.cat([d4, mono_embed], dim=1)         # (B,2*c1,H,W)
+            residual = self.head(d4_cat)                        # (B,1,H,W)
+        else:
+            residual = self.head(d4)    # (B,1,H,W)
+
 
         if self.residual:
             if mono is None:
