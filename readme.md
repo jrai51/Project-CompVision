@@ -33,6 +33,7 @@ python train.py --model_type lidar_mono_rgb
 ## Visualization
 `python visualize.py`
 Visualize a single sample (idx) from KittiDepthCropped with:
+
     - RGB
     - Sparse LiDAR
     - Monocular prior
